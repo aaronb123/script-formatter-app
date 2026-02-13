@@ -1,0 +1,63 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+
+body {
+  color: var(--foreground);
+  background: var(--background);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+/* Script formatting styles */
+.script-output {
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 12pt;
+  line-height: 1.5;
+}
+
+.character-name {
+  text-transform: uppercase;
+  font-weight: bold;
+  text-align: center;
+  margin-top: 1em;
+}
+
+.dialogue {
+  text-align: center;
+  max-width: 60%;
+  margin: 0 auto;
+  padding: 0.5em 0;
+}
+
+.scene-direction {
+  text-align: left;
+  font-style: italic;
+  color: #666;
+  margin: 0.5em 0;
+}
+
+.parenthetical {
+  text-align: center;
+  font-style: italic;
+  max-width: 40%;
+  margin: 0 auto;
+}
+
+/* Dark mode adjustments */
+@media (prefers-color-scheme: dark) {
+  .scene-direction {
+    color: #999;
+  }
+}
