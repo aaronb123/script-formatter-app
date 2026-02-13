@@ -48,6 +48,7 @@ export default function Home() {
   const [newRefNotes, setNewRefNotes] = useState('');
   const [newPronWord, setNewPronWord] = useState('');
   const [newPronPronunciation, setNewPronPronunciation] = useState('');
+  const [newProp, setNewProp] = useState('');
 
   // Get stable character ID - prevents name glitching
   const getStableCharacterId = useCallback((baseName: string): string => {
@@ -171,6 +172,53 @@ export default function Home() {
     }));
   }, []);
 
+  // Update wardrobe for a character
+  const updateWardrobe = useCallback((characterId: string, wardrobe: string) => {
+    setScript(prev => ({
+      ...prev,
+      wardrobe: { ...prev.wardrobe, [characterId]: wardrobe },
+    }));
+  }, []);
+
+  // Add prop
+  const addProp = useCallback(() => {
+    if (!newProp) return;
+    setScript(prev => ({
+      ...prev,
+      props: [...prev.props, newProp],
+    }));
+    setNewProp('');
+  }, [newProp]);
+
+  // Remove prop
+  const removeProp = useCallback((index: number) => {
+    setScript(prev => ({
+      ...prev,
+      props: prev.props.filter((_, i) => i !== index),
+    }));
+  }, []);
+
+  // Reset script
+  const resetScript = useCallback(() => {
+    if (confirm('Are you sure you want to reset? All data will be cleared.')) {
+      setScript({
+        id: generateId(),
+        brandName: '',
+        title: '',
+        characters: DEFAULT_CHARACTERS.map(c => ({ ...c })),
+        lines: [],
+        referenceVideos: [],
+        location: '',
+        props: [],
+        wardrobe: {},
+        pronunciations: [],
+      });
+      setRawScriptText('');
+      setClaimIssues([]);
+      setActiveTab('input');
+    }
+  }, []);
+
   // Update line character assignment
   const updateLineCharacter = useCallback((lineId: string, characterId: string) => {
     setScript(prev => ({
@@ -232,11 +280,19 @@ export default function Home() {
     <main className="min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* Header */}
       <header className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
-        <div className="max-w-7xl mx-auto px-4 py-4">
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">MTRX Script Formatter</h1>
-          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-            Professional script formatting with consistent character roles
-          </p>
+        <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">MTRX Script Formatter</h1>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+              Professional script formatting with consistent character roles
+            </p>
+          </div>
+          <button
+            onClick={resetScript}
+            className="px-4 py-2 text-sm text-red-600 hover:text-red-800 border border-red-300 rounded-md hover:bg-red-50"
+          >
+            Reset All
+          </button>
         </div>
       </header>
 
@@ -345,6 +401,77 @@ export default function Home() {
                 )}
               </div>
             ))}
+          </div>
+        </div>
+
+        {/* Wardrobe Section */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 mb-6">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Wardrobe</h2>
+          <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-md p-3 mb-4">
+            <p className="text-sm text-orange-800 dark:text-orange-200">
+              <strong>Note:</strong> Ensure wardrobe matches the script requirements. If talent needs buttons/cuffs, don&apos;t specify a knitted sweater.
+              Specific items (red slip dress, cowboy hat) must be sourced in advance.
+            </p>
+          </div>
+          <div className="space-y-3">
+            {script.characters.map((character) => (
+              <div key={character.id} className="flex items-center gap-4">
+                <span className="w-32 font-medium text-gray-700 dark:text-gray-300 uppercase text-sm">
+                  {character.name}:
+                </span>
+                <input
+                  type="text"
+                  value={script.wardrobe[character.id] || ''}
+                  onChange={(e) => updateWardrobe(character.id, e.target.value)}
+                  className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                  placeholder="e.g., Business casual - button-down shirt with cuffs"
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Props Section */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 mb-6">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Props &amp; Products</h2>
+          <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-md p-3 mb-4">
+            <p className="text-sm text-purple-800 dark:text-purple-200">
+              <strong>Be explicit:</strong> Specify exact product SKUs, specific ingredients (shiitake mushrooms, not just &quot;mushrooms&quot;),
+              and confirm product availability before the shoot.
+            </p>
+          </div>
+
+          {script.props.length > 0 && (
+            <div className="flex flex-wrap gap-2 mb-4">
+              {script.props.map((prop, index) => (
+                <span key={index} className="inline-flex items-center gap-1 px-3 py-1 bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200 rounded-full text-sm">
+                  {prop}
+                  <button
+                    onClick={() => removeProp(index)}
+                    className="ml-1 text-purple-600 hover:text-purple-800"
+                  >
+                    &times;
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+
+          <div className="flex gap-3">
+            <input
+              type="text"
+              value={newProp}
+              onChange={(e) => setNewProp(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && addProp()}
+              className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+              placeholder="e.g., Product bottle (SKU: ABC123), Shiitake mushrooms"
+            />
+            <button
+              onClick={addProp}
+              className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700"
+            >
+              Add
+            </button>
           </div>
         </div>
 
