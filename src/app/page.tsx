@@ -41,6 +41,10 @@ export default function Home() {
   });
 
   const [rawScriptText, setRawScriptText] = useState('');
+  const [docUrl, setDocUrl] = useState('');
+  const [docLoading, setDocLoading] = useState(false);
+  const [docError, setDocError] = useState('');
+  const [docLoaded, setDocLoaded] = useState(false);
   const [selectedActorId, setSelectedActorId] = useState<string>('host1');
   const [claimIssues, setClaimIssues] = useState<ClaimIssue[]>([]);
   const [newRefUrl, setNewRefUrl] = useState('');
@@ -104,6 +108,39 @@ export default function Home() {
       ),
     }));
   }, []);
+
+  // Fetch Google Doc content
+  const fetchDoc = useCallback(async () => {
+    if (!docUrl) {
+      setDocError('Please paste a Google Docs link');
+      return;
+    }
+
+    setDocLoading(true);
+    setDocError('');
+
+    try {
+      const response = await fetch('/api/fetch-doc', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: docUrl }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setDocError(data.error || 'Failed to fetch document');
+        return;
+      }
+
+      setRawScriptText(data.text);
+      setDocLoaded(true);
+    } catch {
+      setDocError('Failed to fetch document. Check your connection and try again.');
+    } finally {
+      setDocLoading(false);
+    }
+  }, [docUrl]);
 
   // Parse raw script text
   const parseScript = useCallback(() => {
@@ -645,24 +682,54 @@ export default function Home() {
             {/* Input Tab */}
             {activeTab === 'input' && (
               <div>
+                {/* Google Doc URL Input */}
+                <div className="mb-6">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Google Doc Link
+                  </label>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+                    Paste a Google Docs link below. Make sure the doc is set to &quot;Anyone with the link can view&quot;.
+                  </p>
+                  <div className="flex gap-3">
+                    <input
+                      type="url"
+                      value={docUrl}
+                      onChange={(e) => { setDocUrl(e.target.value); setDocError(''); setDocLoaded(false); }}
+                      className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                      placeholder="https://docs.google.com/document/d/your-doc-id/edit"
+                    />
+                    <button
+                      onClick={fetchDoc}
+                      disabled={docLoading}
+                      className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                    >
+                      {docLoading ? 'Loading...' : 'Pull Script'}
+                    </button>
+                  </div>
+                  {docError && (
+                    <p className="mt-2 text-sm text-red-600 dark:text-red-400">{docError}</p>
+                  )}
+                  {docLoaded && !docError && (
+                    <p className="mt-2 text-sm text-green-600 dark:text-green-400">✅ Script loaded from Google Doc</p>
+                  )}
+                </div>
+
+                {/* Preview / Edit loaded content */}
                 <div className="mb-4">
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Paste or type your script below. Use character names on their own line followed by dialogue.
+                    Script Content {docLoaded ? '(loaded from Doc — edit if needed)' : '(or paste manually)'}
                   </label>
                   <textarea
                     value={rawScriptText}
                     onChange={(e) => setRawScriptText(e.target.value)}
                     className="w-full h-96 px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white font-mono text-sm"
-                    placeholder={`HOST 1
+                    placeholder={`Pull a script from Google Docs above, or paste directly here...
+
+HOST 1
 Hey everyone, welcome to today's episode!
 
 HOST 2
-Thanks for having me. I've been hearing a lot about this product.
-
-[HOST 1 picks up product and shows it to camera]
-
-HOST 1
-Let me tell you why this changed everything for me...`}
+Thanks for having me. I've been hearing a lot about this product.`}
                   />
                 </div>
                 <div className="flex justify-end gap-3">
