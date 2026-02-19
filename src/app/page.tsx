@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef } from 'react';
+import dynamic from 'next/dynamic';
 import {
   Script,
   Character,
@@ -17,12 +18,15 @@ import {
   formatCharacterName,
 } from '@/lib/formatter';
 
+// Dynamic import for BriefToDocx to avoid SSR issues with file-saver
+const BriefToDocx = dynamic(() => import('@/components/BriefToDocx'), { ssr: false });
+
 function generateId(): string {
   return Math.random().toString(36).substring(2, 11);
 }
 
 export default function Home() {
-  const [activeTab, setActiveTab] = useState<'input' | 'formatted' | 'actor' | 'claims'>('input');
+  const [activeTab, setActiveTab] = useState<'input' | 'formatted' | 'actor' | 'claims' | 'docx'>('input');
 
   // Use refs to maintain stable character IDs
   const characterIdMapRef = useRef<Map<string, string>>(new Map());
@@ -676,6 +680,16 @@ export default function Home() {
                 </span>
               )}
             </button>
+            <button
+              onClick={() => setActiveTab('docx')}
+              className={`flex-1 px-4 py-3 text-sm font-medium ${
+                activeTab === 'docx'
+                  ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 border-b-2 border-blue-600'
+                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'
+              }`}
+            >
+              Brief → .docx
+            </button>
           </div>
 
           <div className="p-6">
@@ -922,6 +936,16 @@ Thanks for having me. I've been hearing a lot about this product.`}
                     })}
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* Brief to Docx Tab */}
+            {activeTab === 'docx' && (
+              <div>
+                <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">
+                  Generate Actor Script (.docx) from Marketing Brief
+                </h3>
+                <BriefToDocx />
               </div>
             )}
           </div>
