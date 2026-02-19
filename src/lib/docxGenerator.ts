@@ -3,7 +3,6 @@ import {
   Paragraph,
   TextRun,
   AlignmentType,
-  HeadingLevel,
   convertInchesToTwip,
   PageOrientation,
 } from 'docx';
@@ -25,6 +24,7 @@ export interface BriefBlock {
 
 // Lines/patterns to strip out (not actor-relevant)
 const STRIP_PATTERNS = [
+  /^>/,  // Editor notes starting with >
   /^editor\s*notes?:?/i,
   /^editor\s*instructions?:?/i,
   /^b-?roll:?/i,
@@ -39,22 +39,74 @@ const STRIP_PATTERNS = [
   /^timecode:?/i,
   /^\d{2}:\d{2}/,  // Timecodes like 00:15
   /^\/\//,  // Comments starting with //
+  /^split\s*screen/i,
+  /^headline:?/i,
+  /^brief$/i,
+  /^client\s*name:?/i,
+  /^hypothesis:?/i,
+  /^video\s*reference:?/i,
+  /^creator\s*needed:?/i,
+  /^location\s*\d*\s*[-:]?/i,
+  /^outfit:?/i,
+  /^lighting/i,
+  /^camera\s*angles?:?/i,
+  /^props?:?$/i,
+  /^requirement:?/i,
+  /^notes:?$/i,
+  /^general\s*mannerisms:?/i,
+  /^delivery:?/i,
+  /^american\s*accent/i,
+  /^host\s*\d+\s*[-:]\s*(let'?s|we|find|african|between)/i,  // Casting notes
+  /^the\s*shot\s*is/i,  // Camera direction
+  /^no$/i,  // Single word answers in brief
+  /^mtrx_/i,  // Internal codes
+  /^\*\s/,  // Bullet points in notes
+  /remember\s*to\s*do/i,
+  /add\s*in\s*a\s*before/i,
+];
+
+// Brief metadata keywords that indicate we're in a "Brief" section to skip
+const BRIEF_SECTION_KEYWORDS = [
+  'client name', 'hypothesis', 'video reference', 'creator needed',
+  'location', 'outfit', 'lighting', 'camera angles', 'props',
+  'requirement', 'notes', 'general mannerisms', 'delivery'
 ];
 
 // Check if a line should be stripped
 function shouldStripLine(line: string): boolean {
   const trimmed = line.trim();
-  return STRIP_PATTERNS.some(pattern => pattern.test(trimmed));
+  if (!trimmed) return true;
+
+  // Check against strip patterns
+  if (STRIP_PATTERNS.some(pattern => pattern.test(trimmed))) {
+    return true;
+  }
+
+  // Strip lines that are just URLs (not reference URLs at the start)
+  if (/^https?:\/\//.test(trimmed) && trimmed.length > 50) {
+    return true;
+  }
+
+  return false;
 }
 
-// Check if line is a speaker label
-function isSpeakerLabel(line: string): string | null {
+// Check if line is a speaker label (returns speaker name or null)
+function extractSpeaker(line: string): { speaker: string; dialogue: string } | null {
   const trimmed = line.trim();
-  // Match patterns like "HOST:", "EXPERT:", "HOST 1:", etc.
-  const match = trimmed.match(/^(HOST|EXPERT|SPEAKER|TALENT|ACTOR|INTERVIEWER|GUEST)(\s*\d*)?:?\s*$/i);
-  if (match) {
-    return trimmed.replace(/:?\s*$/, '').toUpperCase();
+
+  // Pattern: "HOST 1:" or "EXPERT:" at start of line (label only)
+  const labelOnlyMatch = trimmed.match(/^(HOST\s*\d*|EXPERT|SPEAKER\s*\d*|TALENT|ACTOR|INTERVIEWER|GUEST)\s*:?\s*$/i);
+  if (labelOnlyMatch) {
+    return { speaker: labelOnlyMatch[1].toUpperCase().replace(/\s+/g, ' '), dialogue: '' };
   }
+
+  // Pattern: "HOST 1: dialogue here" or "HOST 1 dialogue here" (inline)
+  const inlineMatch = trimmed.match(/^(HOST\s*\d*(?:\s*MAIN)?|EXPERT|SPEAKER\s*\d*|TALENT|ACTOR|HOST\s*\d+\s*:?)\s*[:\s]\s*(.+)$/i);
+  if (inlineMatch && inlineMatch[2] && inlineMatch[2].length > 10) {
+    const speaker = inlineMatch[1].toUpperCase().replace(/\s+/g, ' ').replace(/:$/, '').replace(/\s*MAIN$/, '');
+    return { speaker, dialogue: inlineMatch[2].trim() };
+  }
+
   return null;
 }
 
@@ -75,90 +127,108 @@ function isStageDirection(line: string): string | null {
   if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
     return trimmed;
   }
-  // Or in parentheses for action directions
-  if (trimmed.startsWith('(') && trimmed.endsWith(')')) {
-    // Convert to brackets for consistency
-    return `[${trimmed.slice(1, -1)}]`;
+  // Performance notes in parentheses like "(Skeptical, Curious)"
+  if (/^\([A-Z][a-z]+,?\s*[A-Z]?[a-z]*\):?$/.test(trimmed)) {
+    return `[${trimmed.slice(1, -1).replace(/:$/, '')}]`;
   }
   return null;
 }
 
 // Extract reference URL from brief
 function extractReferenceUrl(text: string): string {
-  const urlMatch = text.match(/(?:reference|ref|video|link)[\s:]*\n?\s*(https?:\/\/[^\s\n]+)/i);
-  if (urlMatch) return urlMatch[1];
-
-  // Try to find any URL
-  const anyUrlMatch = text.match(/(https?:\/\/[^\s\n]+)/);
-  return anyUrlMatch ? anyUrlMatch[1] : '';
+  // Look for reference URL near the top of the document
+  const lines = text.split('\n').slice(0, 20);
+  for (const line of lines) {
+    const urlMatch = line.match(/(https?:\/\/[^\s\n]+)/);
+    if (urlMatch) return urlMatch[1];
+  }
+  return '';
 }
 
 // Extract title from brief
 function extractTitle(text: string): string {
   const lines = text.split('\n').filter(l => l.trim());
 
-  // Look for explicit title markers
-  const titleMatch = text.match(/(?:title|campaign|script\s*name)[\s:]*\n?\s*([^\n]+)/i);
-  if (titleMatch) return titleMatch[1].trim();
-
-  // Otherwise use first non-empty line that's not a URL
-  for (const line of lines) {
+  // Look for a clear title (usually the first meaningful line that's not a URL or metadata)
+  for (const line of lines.slice(0, 10)) {
     const trimmed = line.trim();
-    if (trimmed && !trimmed.startsWith('http') && !shouldStripLine(trimmed)) {
-      return trimmed;
-    }
+    // Skip URLs
+    if (trimmed.startsWith('http')) continue;
+    // Skip metadata
+    if (/^(brief|client|hypothesis|reference|hook\s*\d)/i.test(trimmed)) continue;
+    // Skip very short lines
+    if (trimmed.length < 3) continue;
+    // Skip lines with colons that look like metadata
+    if (/^[A-Za-z\s]+:\s*$/.test(trimmed)) continue;
+
+    // This looks like a title
+    return trimmed;
   }
 
   return 'Untitled Script';
+}
+
+// Find where the actual script content starts (after the Brief section)
+function findScriptStart(lines: string[]): number {
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim().toLowerCase();
+    // Look for "Script" heading or first HOST/EXPERT line
+    if (line === 'script' || /^host\s*\d*\s*:?\s+\w/.test(lines[i].trim())) {
+      return i;
+    }
+  }
+  return 0;
 }
 
 export function parseBrief(briefText: string): ParsedBrief {
   const title = extractTitle(briefText);
   const referenceUrl = extractReferenceUrl(briefText);
 
-  const lines = briefText.split('\n');
-  const hooks: ParsedBrief['hooks'] = [];
+  const allLines = briefText.split('\n');
+  const scriptStartIndex = findScriptStart(allLines);
+  const lines = allLines.slice(scriptStartIndex);
 
-  let currentHook: { label: string; content: BriefBlock[] } | null = null;
+  const hooks: ParsedBrief['hooks'] = [];
+  let currentHook: { label: string; content: BriefBlock[] } = { label: '', content: [] };
   let currentSpeaker: string | null = null;
-  let collectingDialogue = false;
+  let inBriefSection = false;
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     const trimmed = line.trim();
 
-    // Skip empty lines and stripped content
-    if (!trimmed || shouldStripLine(trimmed)) {
+    // Skip empty lines
+    if (!trimmed) continue;
+
+    // Detect Brief section start (skip until we're out)
+    if (/^brief$/i.test(trimmed)) {
+      inBriefSection = true;
+      continue;
+    }
+
+    // Check if we're exiting Brief section (next Hook or Script section)
+    if (inBriefSection) {
+      if (/^(hook\s*\d+|script)$/i.test(trimmed)) {
+        inBriefSection = false;
+      } else {
+        continue; // Skip Brief section content
+      }
+    }
+
+    // Skip lines that should be stripped
+    if (shouldStripLine(trimmed)) {
       continue;
     }
 
     // Check for hook label
     const hookLabel = isHookLabel(trimmed);
     if (hookLabel) {
-      if (currentHook) {
+      // Save previous hook if it has content
+      if (currentHook.content.length > 0) {
         hooks.push(currentHook);
       }
       currentHook = { label: hookLabel, content: [] };
       currentSpeaker = null;
-      collectingDialogue = false;
-      continue;
-    }
-
-    // If no hook started yet, create a default one
-    if (!currentHook) {
-      currentHook = { label: '', content: [] };
-    }
-
-    // Check for speaker label
-    const speakerLabel = isSpeakerLabel(trimmed);
-    if (speakerLabel) {
-      currentSpeaker = speakerLabel;
-      currentHook.content.push({
-        type: 'speaker',
-        speaker: currentSpeaker,
-        text: currentSpeaker
-      });
-      collectingDialogue = true;
       continue;
     }
 
@@ -172,25 +242,62 @@ export function parseBrief(briefText: string): ParsedBrief {
       continue;
     }
 
-    // Otherwise it's dialogue (if we have a speaker) or skip
-    if (currentSpeaker && collectingDialogue) {
-      // Skip lines that look like production notes within dialogue
-      if (!shouldStripLine(trimmed)) {
+    // Check for speaker (label only or inline with dialogue)
+    const speakerMatch = extractSpeaker(trimmed);
+    if (speakerMatch) {
+      currentSpeaker = speakerMatch.speaker;
+      currentHook.content.push({
+        type: 'speaker',
+        speaker: currentSpeaker,
+        text: currentSpeaker
+      });
+
+      // If there's inline dialogue, add it
+      if (speakerMatch.dialogue) {
         currentHook.content.push({
           type: 'dialogue',
           speaker: currentSpeaker,
-          text: trimmed
+          text: speakerMatch.dialogue
         });
       }
+      continue;
+    }
+
+    // Otherwise it's dialogue (if we have a speaker)
+    if (currentSpeaker) {
+      // Additional filtering for dialogue lines
+      const lowerTrimmed = trimmed.toLowerCase();
+
+      // Skip metadata-looking lines even in dialogue context
+      if (BRIEF_SECTION_KEYWORDS.some(kw => lowerTrimmed.startsWith(kw))) {
+        continue;
+      }
+
+      // Skip single-word lines that look like headers
+      if (trimmed.split(/\s+/).length === 1 && /^[A-Z]/.test(trimmed)) {
+        continue;
+      }
+
+      currentHook.content.push({
+        type: 'dialogue',
+        speaker: currentSpeaker,
+        text: trimmed
+      });
     }
   }
 
   // Don't forget the last hook
-  if (currentHook && currentHook.content.length > 0) {
+  if (currentHook.content.length > 0) {
     hooks.push(currentHook);
   }
 
-  return { title, referenceUrl, hooks };
+  // Filter out hooks that only have empty content or just speaker labels with no dialogue
+  const filteredHooks = hooks.filter(hook => {
+    const hasDialogue = hook.content.some(c => c.type === 'dialogue');
+    return hasDialogue;
+  });
+
+  return { title, referenceUrl, hooks: filteredHooks };
 }
 
 export function generateActorScriptDocx(brief: ParsedBrief): Document {
@@ -235,7 +342,7 @@ export function generateActorScriptDocx(brief: ParsedBrief): Document {
   }
 
   // Process each hook
-  brief.hooks.forEach((hook, hookIndex) => {
+  brief.hooks.forEach((hook) => {
     // Hook label - 13pt Bold Left (with extra spacing before)
     if (hook.label) {
       children.push(
@@ -257,10 +364,9 @@ export function generateActorScriptDocx(brief: ParsedBrief): Document {
     // Process content blocks
     let lastType: string | null = null;
 
-    hook.content.forEach((block, blockIndex) => {
+    hook.content.forEach((block) => {
       if (block.type === 'speaker') {
         // Speaker label - 12pt Bold Center
-        // Add spacing before if not the first block
         children.push(
           new Paragraph({
             children: [
@@ -290,7 +396,7 @@ export function generateActorScriptDocx(brief: ParsedBrief): Document {
               }),
             ],
             alignment: AlignmentType.CENTER,
-            spacing: { before: 0, after: 100 },
+            spacing: { before: 100, after: 100 },
           })
         );
       } else if (block.type === 'direction') {
