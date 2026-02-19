@@ -27,14 +27,50 @@ interface ParsedScript {
 }
 
 type Status = 'idle' | 'fetching' | 'parsing' | 'ready' | 'generating' | 'done' | 'error';
+type InputMode = 'url' | 'paste';
 
 export default function ActorScriptGenerator() {
+  const [inputMode, setInputMode] = useState<InputMode>('paste');
   const [docUrl, setDocUrl] = useState('');
+  const [pastedText, setPastedText] = useState('');
   const [status, setStatus] = useState<Status>('idle');
   const [error, setError] = useState('');
   const [parsedScript, setParsedScript] = useState<ParsedScript | null>(null);
 
-  const handleGenerate = useCallback(async () => {
+  const parseWithAI = useCallback(async (text: string) => {
+    setStatus('parsing');
+
+    try {
+      const parseResponse = await fetch('/api/parse-brief', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ briefText: text }),
+      });
+
+      const parseData = await parseResponse.json();
+
+      if (!parseResponse.ok) {
+        setError(parseData.error || 'Failed to parse document.');
+        setStatus('error');
+        return;
+      }
+
+      if (!parseData.sections || parseData.sections.length === 0) {
+        setError('Could not find any script content. Make sure the text has speaker labels (HOST 1:, HOST 2:, SPEAKER 1:, etc.) and dialogue.');
+        setStatus('error');
+        return;
+      }
+
+      setParsedScript(parseData);
+      setStatus('ready');
+    } catch (err) {
+      console.error(err);
+      setError('Failed to parse. Check your connection and try again.');
+      setStatus('error');
+    }
+  }, []);
+
+  const handleGenerateFromUrl = useCallback(async () => {
     if (!docUrl.trim()) {
       setError('Please paste a Google Docs link');
       return;
@@ -44,7 +80,6 @@ export default function ActorScriptGenerator() {
     setStatus('fetching');
 
     try {
-      // Step 1: Fetch the Google Doc
       const fetchResponse = await fetch('/api/fetch-doc', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -59,37 +94,31 @@ export default function ActorScriptGenerator() {
         return;
       }
 
-      setStatus('parsing');
-
-      // Step 2: Use AI to parse the brief
-      const parseResponse = await fetch('/api/parse-brief', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ briefText: fetchData.text }),
-      });
-
-      const parseData = await parseResponse.json();
-
-      if (!parseResponse.ok) {
-        setError(parseData.error || 'Failed to parse document.');
-        setStatus('error');
-        return;
-      }
-
-      if (!parseData.sections || parseData.sections.length === 0) {
-        setError('Could not find any script content. Make sure the doc has speaker labels (HOST:, EXPERT:) and dialogue.');
-        setStatus('error');
-        return;
-      }
-
-      setParsedScript(parseData);
-      setStatus('ready');
+      await parseWithAI(fetchData.text);
     } catch (err) {
       console.error(err);
-      setError('Failed to process document. Check your connection and try again.');
+      setError('Failed to fetch document. Check your connection and try again.');
       setStatus('error');
     }
-  }, [docUrl]);
+  }, [docUrl, parseWithAI]);
+
+  const handleGenerateFromPaste = useCallback(async () => {
+    if (!pastedText.trim()) {
+      setError('Please paste the script content');
+      return;
+    }
+
+    setError('');
+    await parseWithAI(pastedText);
+  }, [pastedText, parseWithAI]);
+
+  const handleGenerate = useCallback(async () => {
+    if (inputMode === 'url') {
+      await handleGenerateFromUrl();
+    } else {
+      await handleGenerateFromPaste();
+    }
+  }, [inputMode, handleGenerateFromUrl, handleGenerateFromPaste]);
 
   const generateDocx = useCallback((script: ParsedScript): Document => {
     const children: Paragraph[] = [];
@@ -190,21 +219,38 @@ export default function ActorScriptGenerator() {
     );
 
     // Process sections
-    script.sections.forEach((section) => {
-      // Hook label - 13pt Bold
+    script.sections.forEach((section, sectionIndex) => {
+      // Add separator between sections (not before the first one)
+      if (sectionIndex > 0) {
+        children.push(
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: '═'.repeat(40),
+                size: 24,
+                font: 'Arial',
+              }),
+            ],
+            alignment: AlignmentType.CENTER,
+            spacing: { before: 400, after: 400 },
+          })
+        );
+      }
+
+      // Hook/Section label - 14pt Bold, with background highlight effect
       if (section.hook) {
         children.push(
           new Paragraph({
             children: [
               new TextRun({
-                text: section.hook,
+                text: `▸ ${section.hook}`,
                 bold: true,
-                size: 26,
+                size: 28,
                 font: 'Arial',
               }),
             ],
             alignment: AlignmentType.LEFT,
-            spacing: { before: 500, after: 300 },
+            spacing: { before: 300, after: 300 },
           })
         );
       }
@@ -309,6 +355,7 @@ export default function ActorScriptGenerator() {
 
   const handleReset = useCallback(() => {
     setDocUrl('');
+    setPastedText('');
     setStatus('idle');
     setError('');
     setParsedScript(null);
@@ -316,7 +363,7 @@ export default function ActorScriptGenerator() {
 
   return (
     <div className="space-y-6">
-      {/* Step 1: Google Doc URL */}
+      {/* Step 1: Input */}
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
         <div className="flex items-center gap-3 mb-4">
           <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-bold ${
@@ -325,32 +372,82 @@ export default function ActorScriptGenerator() {
             1
           </div>
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-            Paste Google Doc Link
+            Input Script
           </h2>
         </div>
 
-        <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-          Make sure the doc is set to <strong>&quot;Anyone with the link can view&quot;</strong>
-        </p>
-
-        <div className="flex gap-3">
-          <input
-            type="url"
-            value={docUrl}
-            onChange={(e) => { setDocUrl(e.target.value); setError(''); }}
-            disabled={status !== 'idle' && status !== 'error'}
-            className="flex-1 px-4 py-3 text-lg border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white disabled:opacity-50"
-            placeholder="https://docs.google.com/document/d/..."
-          />
-          {(status === 'idle' || status === 'error') && (
-            <button
-              onClick={handleGenerate}
-              className="px-8 py-3 bg-blue-600 text-white text-lg font-semibold rounded-lg hover:bg-blue-700 whitespace-nowrap"
-            >
-              Generate Script
-            </button>
-          )}
+        {/* Mode toggle */}
+        <div className="flex gap-2 mb-4">
+          <button
+            onClick={() => setInputMode('paste')}
+            className={`px-4 py-2 rounded-lg font-medium transition ${
+              inputMode === 'paste'
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+            }`}
+          >
+            Paste Text
+          </button>
+          <button
+            onClick={() => setInputMode('url')}
+            className={`px-4 py-2 rounded-lg font-medium transition ${
+              inputMode === 'url'
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+            }`}
+          >
+            Google Doc URL
+          </button>
         </div>
+
+        {inputMode === 'paste' ? (
+          <div>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+              Copy the script content from your Google Doc tab and paste it here.
+              <br />
+              <span className="text-yellow-600 dark:text-yellow-400">Tip: Select all (Cmd+A) in the specific tab, then copy (Cmd+C)</span>
+            </p>
+            <textarea
+              value={pastedText}
+              onChange={(e) => { setPastedText(e.target.value); setError(''); }}
+              disabled={status !== 'idle' && status !== 'error'}
+              className="w-full h-64 px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white disabled:opacity-50 font-mono text-sm"
+              placeholder="Paste your script content here...
+
+Example:
+Hook 1:
+
+Speaker 1 HOST1: I've been told by three different doctors...
+
+Speaker 2: Wait, back up. What do you mean?"
+            />
+          </div>
+        ) : (
+          <div>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+              Make sure the doc is set to <strong>&quot;Anyone with the link can view&quot;</strong>
+              <br />
+              <span className="text-yellow-600 dark:text-yellow-400">Note: If your doc has multiple tabs, only the first tab will be fetched. Use &quot;Paste Text&quot; for specific tabs.</span>
+            </p>
+            <input
+              type="url"
+              value={docUrl}
+              onChange={(e) => { setDocUrl(e.target.value); setError(''); }}
+              disabled={status !== 'idle' && status !== 'error'}
+              className="w-full px-4 py-3 text-lg border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white disabled:opacity-50"
+              placeholder="https://docs.google.com/document/d/..."
+            />
+          </div>
+        )}
+
+        {(status === 'idle' || status === 'error') && (
+          <button
+            onClick={handleGenerate}
+            className="mt-4 w-full px-8 py-3 bg-blue-600 text-white text-lg font-semibold rounded-lg hover:bg-blue-700"
+          >
+            Generate Actor Script
+          </button>
+        )}
 
         {error && (
           <div className="mt-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
@@ -361,7 +458,7 @@ export default function ActorScriptGenerator() {
         {(status === 'fetching' || status === 'parsing') && (
           <div className="mt-4 flex items-center gap-3 text-blue-600 dark:text-blue-400">
             <div className="animate-spin w-5 h-5 border-2 border-current border-t-transparent rounded-full"></div>
-            <span>{status === 'fetching' ? 'Fetching document...' : 'AI parsing script (this may take a few seconds)...'}</span>
+            <span>{status === 'fetching' ? 'Fetching document...' : 'AI parsing script...'}</span>
           </div>
         )}
       </div>
@@ -447,7 +544,7 @@ export default function ActorScriptGenerator() {
         </div>
       )}
 
-      {/* What&apos;s included */}
+      {/* What's included */}
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
         <h3 className="font-semibold text-gray-900 dark:text-white mb-4">What the Actor Script Contains</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
@@ -457,7 +554,7 @@ export default function ActorScriptGenerator() {
               <li>• Brand name + Script title</li>
               <li>• Reference video URL</li>
               <li>• Character/tone notes</li>
-              <li>• Speaker labels (HOST, EXPERT)</li>
+              <li>• Speaker labels (HOST 1, HOST 2)</li>
               <li>• Dialogue (exact copy)</li>
               <li>• Stage directions</li>
             </ul>

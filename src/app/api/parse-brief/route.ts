@@ -39,6 +39,13 @@ If the source script has these roles swapped or inconsistent, NORMALIZE them:
 - The character with product knowledge = HOST 1
 - The character asking questions/skeptical = HOST 2
 
+SECTION BOUNDARIES (CRITICAL):
+- Each HOOK section (Hook 1, Hook 2, Hook 3) is a SEPARATE mini-script
+- Hooks are short - usually just 1-3 speaker exchanges
+- When you see "Script" or "Base Script" - that's a NEW section (the main body)
+- Keep Hook sections short and separate from the main Script section
+- Each Hook typically ends after the opening exchange (1-2 lines per speaker max)
+
 OUTPUT FORMAT:
 Return a JSON object with this structure:
 {
@@ -48,7 +55,7 @@ Return a JSON object with this structure:
   "characterNotes": "Brief delivery notes if any (e.g., 'Conversational, friendly tone')",
   "sections": [
     {
-      "hook": "HOOK 1:" or "" if no hook label,
+      "hook": "HOOK 1:" or "SCRIPT:" or "" for unlabeled sections,
       "lines": [
         { "type": "speaker", "text": "HOST 1" },
         { "type": "dialogue", "text": "The actual line spoken" },
@@ -57,6 +64,12 @@ Return a JSON object with this structure:
     }
   ]
 }
+
+IMPORTANT: Create SEPARATE sections for:
+- HOOK 1 (just the hook content)
+- HOOK 2 (just the hook content)
+- HOOK 3 (just the hook content)
+- SCRIPT (the main body after hooks)
 
 CRITICAL: All dialogue text must be an exact 1:1 copy of the source. No rewording, no paraphrasing, no corrections.`;
 
