@@ -8,7 +8,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No URL provided' }, { status: 400 });
     }
 
-    // Extract the Google Doc ID from various URL formats
+    // Extract the Google Doc ID and optional tab ID from various URL formats
     const docId = extractDocId(url);
     if (!docId) {
       return NextResponse.json(
@@ -17,8 +17,14 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Extract tab ID if present (e.g., ?tab=t.akkh1zelbl96)
+    const tabId = extractTabId(url);
+
     // Fetch the doc as plain text using Google's export URL
-    const exportUrl = `https://docs.google.com/document/d/${docId}/export?format=txt`;
+    let exportUrl = `https://docs.google.com/document/d/${docId}/export?format=txt`;
+    if (tabId) {
+      exportUrl += `&tab=${tabId}`;
+    }
     const response = await fetch(exportUrl);
 
     if (!response.ok) {
@@ -68,4 +74,10 @@ function extractDocId(url: string): string | null {
   }
 
   return null;
+}
+
+function extractTabId(url: string): string | null {
+  // Match ?tab=t.xxxxx or &tab=t.xxxxx
+  const match = url.match(/[?&]tab=(t\.[a-zA-Z0-9_-]+)/);
+  return match ? match[1] : null;
 }

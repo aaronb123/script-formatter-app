@@ -12,11 +12,18 @@ import {
 } from 'docx';
 import { saveAs } from 'file-saver';
 
+interface CharacterInfo {
+  name: string;
+  role: string;
+  description: string;
+}
+
 interface ParsedScript {
   brand: string;
   title: string;
   referenceUrl: string;
   characterNotes?: string;
+  characters?: CharacterInfo[];
   sections: {
     hook: string;
     lines: {
@@ -203,6 +210,54 @@ export default function ActorScriptGenerator() {
       );
     }
 
+    // Characters
+    if (script.characters && script.characters.length > 0) {
+      children.push(
+        new Paragraph({
+          children: [
+            new TextRun({
+              text: 'CHARACTERS:',
+              bold: true,
+              size: 24,
+              font: 'Arial',
+            }),
+          ],
+          alignment: AlignmentType.LEFT,
+          spacing: { before: 200, after: 100 },
+        })
+      );
+
+      script.characters.forEach((char) => {
+        children.push(
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: `${char.name}`,
+                bold: true,
+                size: 22,
+                font: 'Arial',
+              }),
+              new TextRun({
+                text: ` (${char.role})`,
+                size: 22,
+                font: 'Arial',
+              }),
+              ...(char.description ? [
+                new TextRun({
+                  text: ` — ${char.description}`,
+                  italics: true,
+                  size: 22,
+                  font: 'Arial',
+                }),
+              ] : []),
+            ],
+            alignment: AlignmentType.LEFT,
+            spacing: { before: 50, after: 50 },
+          })
+        );
+      });
+    }
+
     // Separator
     children.push(
       new Paragraph({
@@ -214,7 +269,7 @@ export default function ActorScriptGenerator() {
           }),
         ],
         alignment: AlignmentType.CENTER,
-        spacing: { after: 400 },
+        spacing: { before: 200, after: 400 },
       })
     );
 
@@ -427,7 +482,7 @@ Speaker 2: Wait, back up. What do you mean?"
             <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
               Make sure the doc is set to <strong>&quot;Anyone with the link can view&quot;</strong>
               <br />
-              <span className="text-yellow-600 dark:text-yellow-400">Note: If your doc has multiple tabs, only the first tab will be fetched. Use &quot;Paste Text&quot; for specific tabs.</span>
+              <span className="text-yellow-600 dark:text-yellow-400">Tip: If your doc has multiple tabs, paste the full URL with the tab selected (e.g., ?tab=t.xxxxx) to fetch that specific tab.</span>
             </p>
             <input
               type="url"
@@ -486,6 +541,17 @@ Speaker 2: Wait, back up. What do you mean?"
             )}
             {parsedScript.characterNotes && (
               <p className="text-sm italic text-gray-600 dark:text-gray-400">Tone: {parsedScript.characterNotes}</p>
+            )}
+            {parsedScript.characters && parsedScript.characters.length > 0 && (
+              <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-600">
+                <p className="text-sm font-semibold mb-1">Characters:</p>
+                {parsedScript.characters.map((char, idx) => (
+                  <p key={idx} className="text-sm text-gray-600 dark:text-gray-400">
+                    <span className="font-medium text-gray-900 dark:text-gray-200">{char.name}</span>
+                    {' '}({char.role}){char.description ? ` — ${char.description}` : ''}
+                  </p>
+                ))}
+              </div>
             )}
           </div>
 

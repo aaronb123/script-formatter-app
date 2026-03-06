@@ -11,9 +11,9 @@ INCLUDE (actor-relevant):
 - Brand name (extract from "Client Name" field or document context)
 - Title/campaign name (the script code like "MTRX_YH2_Ti_VSL6" or descriptive title)
 - Reference video URL (first URL found, usually from "Video Reference" field)
-- Character notes about delivery tone/style (brief notes only, not full paragraphs)
+- ALL character/speaker personas with their names and descriptions
 - Hook sections with their labels (HOOK 1:, HOOK 2:, etc.)
-- Speaker labels (HOST:, EXPERT:, HOST 1:, HOST 2:, etc.)
+- Speaker labels using the character's ACTUAL NAME from the brief
 - Dialogue - the actual spoken lines, exact 1:1 copy, no changes
 - Stage directions that tell the actor what to physically do (e.g., [looks at camera], [holds product])
 
@@ -31,13 +31,21 @@ STRIP OUT (not actor-relevant):
 - General Mannerisms bullet points (actors know how to act)
 - Any production-only notes, timecodes, or technical directions
 
-ROLE DEFINITIONS (CRITICAL - enforce consistency):
-- HOST 1 / HOST 1 MAIN / EXPERT = ALWAYS the "Brand Ambassador" / "Advocate" - the person who KNOWS the product, delivers the main info, usually has the most lines
-- HOST 2 / GUEST = ALWAYS the "Discoverer" / "Skeptic" / "Detractor" - the person LEARNING about the product, asks questions, expresses doubts
+CHARACTER NAME EXTRACTION (CRITICAL - read carefully):
+1. Search the ENTIRE brief for character names. They often appear in:
+   - "Speaker 1 HOST1: NAME" or "Speaker 1: NAME" patterns
+   - Character description sections (e.g., "Host 1 - Sarah (Brand Ambassador)")
+   - Casting notes mentioning names
+   - Dialogue labels that use names instead of HOST 1/HOST 2
+2. If the brief assigns actual names to speakers (e.g., "Sarah", "Mike", "Dr. Johnson"), you MUST use those names as speaker labels throughout the script instead of HOST 1/HOST 2.
+3. Only fall back to HOST 1/HOST 2 if NO character names are found anywhere in the brief.
+4. Be consistent - use the SAME name for each character across all hooks and the main script.
 
-If the source script has these roles swapped or inconsistent, NORMALIZE them:
-- The character with product knowledge = HOST 1
-- The character asking questions/skeptical = HOST 2
+ROLE DEFINITIONS:
+- The "Brand Ambassador" / "Advocate" / "Expert" = the person who KNOWS the product, delivers the main info, usually has the most lines
+- The "Discoverer" / "Skeptic" / "Detractor" / "Guest" = the person LEARNING about the product, asks questions, expresses doubts
+
+If the source script has roles swapped or inconsistent, NORMALIZE them but keep using their actual names.
 
 SECTION BOUNDARIES (CRITICAL):
 - Each HOOK section (Hook 1, Hook 2, Hook 3) is a SEPARATE mini-script
@@ -52,12 +60,24 @@ Return a JSON object with this structure:
   "brand": "Brand name (e.g., Yucca Health)",
   "title": "Script title/code",
   "referenceUrl": "URL if found",
-  "characterNotes": "Brief delivery notes if any (e.g., 'Conversational, friendly tone')",
+  "characterNotes": "Brief overall delivery notes if any (e.g., 'Conversational, friendly tone')",
+  "characters": [
+    {
+      "name": "ACTUAL NAME from brief or HOST 1 if no name found",
+      "role": "Brand Ambassador / Expert",
+      "description": "Persona description - e.g., 'Knows the product inside out, energetic, advocates for the brand'"
+    },
+    {
+      "name": "ACTUAL NAME from brief or HOST 2 if no name found",
+      "role": "Discoverer / Skeptic",
+      "description": "Persona description - e.g., 'Curious newcomer, asks tough questions, starts skeptical'"
+    }
+  ],
   "sections": [
     {
       "hook": "HOOK 1:" or "SCRIPT:" or "" for unlabeled sections,
       "lines": [
-        { "type": "speaker", "text": "HOST 1" },
+        { "type": "speaker", "text": "CHARACTER NAME (must match a name from the characters array)" },
         { "type": "dialogue", "text": "The actual line spoken" },
         { "type": "direction", "text": "[Stage direction in brackets]" }
       ]
@@ -71,7 +91,9 @@ IMPORTANT: Create SEPARATE sections for:
 - HOOK 3 (just the hook content)
 - SCRIPT (the main body after hooks)
 
-CRITICAL: All dialogue text must be an exact 1:1 copy of the source. No rewording, no paraphrasing, no corrections.`;
+CRITICAL: All dialogue text must be an exact 1:1 copy of the source. No rewording, no paraphrasing, no corrections.
+CRITICAL: The "characters" array MUST include ALL speakers found in the brief. Never omit a character. If there are 2 speakers, include 2 characters. If there are 3, include 3.
+CRITICAL: Speaker labels in section lines MUST use the character's name from the "characters" array, NOT generic HOST 1/HOST 2 (unless no names were found).`;
 
 export async function POST(req: NextRequest) {
   try {
