@@ -18,11 +18,17 @@ interface CharacterInfo {
   description: string;
 }
 
+interface WardrobeItem {
+  character: string;
+  details: string;
+}
+
 interface ParsedScript {
   brand: string;
   title: string;
   referenceUrl: string;
   characterNotes?: string;
+  wardrobe?: WardrobeItem[];
   characters?: CharacterInfo[];
   sections: {
     hook: string;
@@ -250,6 +256,46 @@ export default function ActorScriptGenerator() {
                   font: 'Arial',
                 }),
               ] : []),
+            ],
+            alignment: AlignmentType.LEFT,
+            spacing: { before: 50, after: 50 },
+          })
+        );
+      });
+    }
+
+    // Wardrobe
+    if (script.wardrobe && script.wardrobe.length > 0) {
+      children.push(
+        new Paragraph({
+          children: [
+            new TextRun({
+              text: 'WARDROBE:',
+              bold: true,
+              size: 24,
+              font: 'Arial',
+            }),
+          ],
+          alignment: AlignmentType.LEFT,
+          spacing: { before: 300, after: 100 },
+        })
+      );
+
+      script.wardrobe.forEach((item) => {
+        children.push(
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: `${item.character}`,
+                bold: true,
+                size: 22,
+                font: 'Arial',
+              }),
+              new TextRun({
+                text: ` — ${item.details}`,
+                size: 22,
+                font: 'Arial',
+              }),
             ],
             alignment: AlignmentType.LEFT,
             spacing: { before: 50, after: 50 },
@@ -553,6 +599,17 @@ Speaker 2: Wait, back up. What do you mean?"
                 ))}
               </div>
             )}
+            {parsedScript.wardrobe && parsedScript.wardrobe.length > 0 && (
+              <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-600">
+                <p className="text-sm font-semibold mb-1">Wardrobe:</p>
+                {parsedScript.wardrobe.map((item, idx) => (
+                  <p key={idx} className="text-sm text-gray-600 dark:text-gray-400">
+                    <span className="font-medium text-gray-900 dark:text-gray-200">{item.character}</span>
+                    {' — '}{item.details}
+                  </p>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Preview */}
@@ -620,6 +677,7 @@ Speaker 2: Wait, back up. What do you mean?"
               <li>• Brand name + Script title</li>
               <li>• Reference video URL</li>
               <li>• Character/tone notes</li>
+              <li>• Wardrobe/outfit details</li>
               <li>• Speaker labels (HOST 1, HOST 2)</li>
               <li>• Dialogue (exact copy)</li>
               <li>• Stage directions</li>

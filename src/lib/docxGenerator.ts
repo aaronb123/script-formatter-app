@@ -47,7 +47,6 @@ const STRIP_PATTERNS = [
   /^video\s*reference:?/i,
   /^creator\s*needed:?/i,
   /^location\s*\d*\s*[-:]?/i,
-  /^outfit:?/i,
   /^lighting/i,
   /^camera\s*angles?:?/i,
   /^props?:?$/i,
@@ -68,7 +67,7 @@ const STRIP_PATTERNS = [
 // Brief metadata keywords that indicate we're in a "Brief" section to skip
 const BRIEF_SECTION_KEYWORDS = [
   'client name', 'hypothesis', 'video reference', 'creator needed',
-  'location', 'outfit', 'lighting', 'camera angles', 'props',
+  'location', 'lighting', 'camera angles', 'props',
   'requirement', 'notes', 'general mannerisms', 'delivery'
 ];
 

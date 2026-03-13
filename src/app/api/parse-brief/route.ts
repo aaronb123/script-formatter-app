@@ -12,6 +12,7 @@ INCLUDE (actor-relevant):
 - Title/campaign name (the script code like "MTRX_YH2_Ti_VSL6" or descriptive title)
 - Reference video URL (first URL found, usually from "Video Reference" field)
 - ALL character/speaker personas with their names and descriptions
+- Wardrobe/outfit details for each character (extract from "Outfit", "Wardrobe", or clothing descriptions in the brief)
 - Hook sections with their labels (HOOK 1:, HOOK 2:, etc.)
 - Speaker labels using the character's ACTUAL NAME from the brief
 - Dialogue - the actual spoken lines, exact 1:1 copy, no changes
@@ -25,7 +26,6 @@ STRIP OUT (not actor-relevant):
 - KILL THESE sections
 - Location descriptions (the actor already knows where they're shooting)
 - Demographics/casting notes ("African american talent", "30-50 yrs old")
-- Outfit/wardrobe descriptions
 - Props lists
 - Hypothesis sections
 - General Mannerisms bullet points (actors know how to act)
@@ -61,6 +61,12 @@ Return a JSON object with this structure:
   "title": "Script title/code",
   "referenceUrl": "URL if found",
   "characterNotes": "Brief overall delivery notes if any (e.g., 'Conversational, friendly tone')",
+  "wardrobe": [
+    {
+      "character": "CHARACTER NAME (matching a name from the characters array)",
+      "details": "Full wardrobe/outfit description from the brief"
+    }
+  ],
   "characters": [
     {
       "name": "ACTUAL NAME from brief or HOST 1 if no name found",
