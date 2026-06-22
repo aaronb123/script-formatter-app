@@ -143,11 +143,12 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json(parsed);
-  } catch (error) {
-    console.error('Error parsing brief:', error);
+  } catch (error: unknown) {
+    const err = error as { message?: string; status?: number };
+    console.error('Error parsing brief:', JSON.stringify(error, null, 2));
     return NextResponse.json(
-      { error: 'Failed to parse brief. Please try again.' },
-      { status: 500 }
+      { error: `API Error: ${err.message || 'Unknown error'}` },
+      { status: err.status || 500 }
     );
   }
 }
